@@ -9,18 +9,39 @@ import tempfile
 from datetime import datetime
 
 
-def save_uploaded_file(uploaded_file) -> str:
+def save_uploaded_file(uploaded_file, progress_callback=None) -> str:
     """
     Streamlit's file_uploader gives us an in-memory file object, not a
     real path on disk. cv2.VideoCapture needs an actual file path, so
     we write the bytes to a temp file once and reuse that path everywhere.
 
-    We keep the original extension so OpenCV/codecs can identify the
-    container format correctly.
+    Note: by the time this function runs, the browser -> server upload
+    is already finished (Streamlit handles that internally, with its own
+    built-in progress indicator on the widget itself — there's no way to
+    hook into that part from our code). What we CAN show real progress
+    for is this disk-write step, which is done in chunks below and is
+    genuinely slow for large video files, especially on limited hosting.
+
+    progress_callback: optional function called with a float 0.0-1.0
+    as each chunk is written, so the UI can update a progress bar.
     """
     suffix = os.path.splitext(uploaded_file.name)[1] or ".mp4"
+    total_size = uploaded_file.size
+    chunk_size = 1024 * 1024  # 1 MB per chunk
+
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    tfile.write(uploaded_file.read())
+    written = 0
+
+    uploaded_file.seek(0)
+    while True:
+        chunk = uploaded_file.read(chunk_size)
+        if not chunk:
+            break
+        tfile.write(chunk)
+        written += len(chunk)
+        if progress_callback and total_size:
+            progress_callback(min(written / total_size, 1.0))
+
     tfile.close()
     return tfile.name
 

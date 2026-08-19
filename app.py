@@ -30,8 +30,14 @@ if uploaded_file is not None:
     # Only re-save if it's a new/different file, to avoid rewriting
     # the temp file on every rerun.
     if st.session_state.original_name != uploaded_file.name:
-        st.session_state.video_path = save_uploaded_file(uploaded_file)
+        progress_bar = st.progress(0, text="Saving video... 0%")
+
+        def update_progress(fraction: float):
+            progress_bar.progress(fraction, text=f"Saving video... {int(fraction * 100)}%")
+
+        st.session_state.video_path = save_uploaded_file(uploaded_file, update_progress)
         st.session_state.original_name = uploaded_file.name
+        progress_bar.empty()  # remove the bar once saving is done
 
 if st.session_state.video_path:
     st.video(st.session_state.video_path)
